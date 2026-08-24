@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบแปลงสกุลเงิน</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 550px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .input-group { display: flex; align-items: center; gap: 10px; }
+        .swap-container { text-align: center; margin: 10px 0; }
+        input[type="number"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; background-color: #007bff; color: white; transition: 0.3s; margin-right: 5px; margin-bottom: 10px; }
+        button:hover { background-color: #0056b3; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover { background-color: #c82333; }
+        
+        /* ตกแต่งปุ่มสลับสกุลเงิน */
+        .btn-swap { background-color: #6c757d; border-radius: 50%; padding: 0; width: 40px; height: 40px; display: inline-flex; justify-content: center; align-items: center; font-size: 1.2em; margin: 0; }
+        .btn-swap:hover { background-color: #5a6268; }
+
+        .info-text { font-size: 0.9em; color: #555; margin-bottom: 10px; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #f8f9fa; margin-bottom: 5px; padding: 8px; border-radius: 4px; border-left: 4px solid #28a745; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>แปลงสกุลเงิน</h2>
+    
+    <!-- แสดงเวลาที่อัปเดตล่าสุดและเรทราคา -->
+    <div class="info-text" id="update-time">อัปเดตล่าสุดเมื่อ: -</div>
+    <div class="info-text" id="rate-text">อัตราแลกเปลี่ยนปัจจุบัน: 1 USD = 35.00 THB</div>
+
+    <!-- ช่องกรอกที่ 1 (ต้นทาง) -->
+    <div class="input-group">
+        <input type="number" id="amount-one" placeholder="จำนวนเงินต้นทาง">
+        <select id="currency-one">
+            <option value="USD">USD</option>
+            <option value="THB">THB</option>
+        </select>
+    </div>
+
+    <!-- ปุ่มสลับสกุลเงิน -->
+    <div class="swap-container">
+        <button id="swap-btn" class="btn-swap" title="สลับสกุลเงิน">⇅</button>
+    </div>
+
+    <!-- ช่องกรอกที่ 2 (ปลายทาง) - ล็อคการพิมพ์ -->
+    <div class="input-group">
+        <input type="number" id="amount-two" placeholder="ผลลัพธ์การแปลงเงิน" readonly style="background-color: #e9ecef; cursor: not-allowed;">
+        <select id="currency-two">
+            <option value="THB" selected>THB</option>
+            <option value="USD">USD</option>
+        </select>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+    <!-- ประวัติการแปลงเงิน -->
+    <h3>ประวัติการแปลงเงิน (10 รายการล่าสุด)</h3>
+    <button id="clear-history-btn" class="btn-danger">ล้างประวัติทั้งหมด</button>
+    <ul id="history-container"></ul>
+</div>
+
+<script>
+    const amountOne = document.getElementById('amount-one');
+    const amountTwo = document.getElementById('amount-two');
+    const currencyOne = document.getElementById('currency-one');
+    const currencyTwo = document.getElementById('currency-two');
+    const rateText = document.getElementById('rate-text');
+    const timeDisplay = document.getElementById('update-time');
+    const historyContainer = document.getElementById('history-container');
+    
+    // ตั้งค่าเรทราคา
+    const rates = {
+        "USD": 1,
+        "THB": 35.00
+    };
+    
+    let historyList = [];
+
+    function getExchangeRate(fromCurr, toCurr) {
+        return rates[toCurr] / rates[fromCurr];
+    }
+
+    function updateRateText() {
+        const curr1 = currencyOne.value;
+        const curr2 = currencyTwo.value;
+        const rate = getExchangeRate(curr1, curr2);
+        rateText.innerText = `อัตราแลกเปลี่ยนปัจจุบัน: 1 ${curr1} = ${rate.toFixed(2)} ${curr2}`;
+    }
+
+    function updateTimestamp() {
+        const now = new Date();
+        timeDisplay.innerText = `อัปเดตล่าสุดเมื่อ: ${now.toLocaleString('th-TH')}`;
+    }
+
+    function addHistory(fromAmt, fromCurr, toAmt, toCurr) {
+        if (!fromAmt || !toAmt) return;
+        const historyItem = `${Number(fromAmt).toLocaleString()} ${fromCurr} → ${Number(toAmt).toLocaleString()} ${toCurr}`;
+        historyList.unshift(historyItem);
+        if (historyList.length > 10) historyList.pop();
+        renderHistory();
+    }
+
+    function renderHistory() {
+        if (historyList.length === 0) {
+            historyContainer.innerHTML = '<li>ไม่มีประวัติการแปลงเงิน</li>';
+            return;
+        }
+        historyContainer.innerHTML = historyList.map(item => `<li>${item}</li>`).join('');
+    }
+
+    // คำนวณแบบทิศทางเดียว (เพราะช่อง 2 โดนล็อคแล้ว)
+    function calculateFromOne() {
+        if (amountOne.value === '') { amountTwo.value = ''; return; }
+        const rate = getExchangeRate(currencyOne.value, currencyTwo.value);
+        amountTwo.value = (amountOne.value * rate).toFixed(2);
+        updateTimestamp();
+    }
+
+    // จับ Event เมื่อมีการพิมพ์หรือเปลี่ยนสกุลเงิน
+    amountOne.addEventListener('input', calculateFromOne);
+
+    currencyOne.addEventListener('change', () => {
+        updateRateText();
+        calculateFromOne();
+    });
+    
+    currencyTwo.addEventListener('change', () => {
+        updateRateText();
+        calculateFromOne();
+    });
+
+    // บันทึกประวัติเมื่อพิมพ์เสร็จ
+    amountOne.addEventListener('change', () => {
+        addHistory(amountOne.value, currencyOne.value, amountTwo.value, currencyTwo.value);
+    });
+
+    // --- ฟังก์ชันสำหรับปุ่ม "สลับสกุลเงิน" ---
+    document.getElementById('swap-btn').addEventListener('click', () => {
+        // สลับค่า Dropdown สกุลเงิน
+        const tempCurrency = currencyOne.value;
+        currencyOne.value = currencyTwo.value;
+        currencyTwo.value = tempCurrency;
+
+        // ดึงผลลัพธ์จากช่องที่ 2 มาเป็นตัวตั้งในช่องที่ 1
+        if (amountTwo.value !== '') {
+            amountOne.value = amountTwo.value;
+        }
+
+        // อัปเดตข้อความเรทและคำนวณใหม่
+        updateRateText();
+        calculateFromOne();
+        
+        // บันทึกประวัติการสลับ
+        if (amountOne.value !== '') {
+            addHistory(amountOne.value, currencyOne.value, amountTwo.value, currencyTwo.value);
+        }
+    });
+
+    // ฟังก์ชันล้างประวัติ
+    document.getElementById('clear-history-btn').addEventListener('click', () => {
+        historyList = [];
+        renderHistory();
+    });
+
+    // เริ่มต้นระบบเมื่อเปิดหน้าเว็บ
+    updateRateText();
+    updateTimestamp();
+    renderHistory();
+</script>
+
+</body>
+</html>
