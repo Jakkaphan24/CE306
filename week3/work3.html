@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกรายรับ-รายจ่าย</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; }
+        .summary-box { background-color: #f4f4f4; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .input-group { margin-bottom: 15px; }
+        input, select, button { padding: 8px; margin-right: 5px; margin-bottom: 5px; }
+        ul { list-style-type: none; padding: 0; }
+        li { background: #eef; padding: 10px; margin-bottom: 5px; border-radius: 3px; }
+        .text-green { color: green; font-weight: bold; }
+        .text-red { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>บันทึกรายรับ-รายจ่าย</h2>
+
+    <!-- โจทย์ที่ 4: สรุปรายงานการเงิน -->
+    <div class="summary-box">
+        <p>รายรับรวม: <span id="total-income" class="text-green">0</span> บาท</p>
+        <p>รายจ่ายรวม: <span id="total-expense" class="text-red">0</span> บาท</p>
+        <h3>คงเหลือสุทธิ: <span id="net-balance">0</span> บาท</h3>
+    </div>
+
+    <!-- ฟอร์มรับข้อมูล -->
+    <div class="input-group">
+        <input type="text" id="name" placeholder="ชื่อรายการ">
+        <input type="number" id="amount" placeholder="จำนวนเงิน">
+        
+        <select id="type">
+            <option value="รายรับ">รายรับ</option>
+            <option value="รายจ่าย">รายจ่าย</option>
+        </select>
+
+        <!-- โจทย์ที่ 1: เพิ่มหมวดหมู่ธุรกรรม -->
+        <select id="category">
+            <option value="อาหาร">อาหาร</option>
+            <option value="เดินทาง">เดินทาง</option>
+            <option value="ช้อปปิ้ง">ช้อปปิ้ง</option>
+            <option value="เงินเดือน">เงินเดือน</option>
+            <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+
+        <button onclick="addTransaction()">เพิ่มข้อมูล</button>
+    </div>
+
+    <hr>
+
+    <!-- โจทย์ที่ 2: เพิ่มช่องค้นหา (Real-time Filter) -->
+    <div class="input-group">
+        <label>ค้นหารายการ: </label>
+        <input type="text" id="search-box" placeholder="พิมพ์ชื่อรายการ..." onkeyup="filterData()">
+    </div>
+
+    <!-- โจทย์ที่ 3: แสดงประวัติรายการทั้งหมด -->
+    <h3>ประวัติรายการ</h3>
+    <ul id="transaction-list"></ul>
+
+    <!-- โจทย์ที่ 5: ปุ่มล้างประวัติทั้งหมด -->
+    <button onclick="clearAll()" style="background-color: red; color: white;">ล้างข้อมูลทั้งหมด</button>
+
+    <script>
+        // สร้าง Array เปล่าสำหรับเก็บข้อมูล
+        let transactions = [];
+        let runningId = 1;
+
+        // ฟังก์ชันเพิ่มข้อมูล
+        function addTransaction() {
+            let name = document.getElementById("name").value;
+            let amount = parseFloat(document.getElementById("amount").value);
+            let type = document.getElementById("type").value;
+            let category = document.getElementById("category").value;
+
+            // ตรวจสอบว่ากรอกข้อมูลครบไหม
+            if (name === "" || isNaN(amount)) {
+                alert("กรุณากรอกชื่อรายการและจำนวนเงินให้ครบถ้วนค่ะ");
+                return;
+            }
+
+            // เก็บข้อมูลเป็น Object
+            let newData = {
+                id: runningId,
+                name: name,
+                amount: amount,
+                type: type,
+                category: category
+            };
+
+            transactions.push(newData);
+            runningId++; // เพิ่มเลข ID ทีละ 1
+
+            // เคลียร์ช่องพิมพ์
+            document.getElementById("name").value = "";
+            document.getElementById("amount").value = "";
+
+            updateUI(); // เรียกฟังก์ชันอัปเดตหน้าจอ
+        }
+
+        // ฟังก์ชันอัปเดตหน้าจอและคำนวณเงิน
+        function updateUI(dataToShow = transactions) {
+            let list = document.getElementById("transaction-list");
+            list.innerHTML = ""; // ล้างรายการเก่าบนหน้าจอก่อน
+
+            let sumIncome = 0;
+            let sumExpense = 0;
+
+            // วนลูปเพื่อแสดงผล (โจทย์ที่ 1 และ 3)
+            for (let i = 0; i < dataToShow.length; i++) {
+                let item = dataToShow[i];
+                let li = document.createElement("li");
+                
+                // รูปแบบ: ID | ประเภท | ชื่อรายการ (หมวดหมู่) | จำนวนเงิน
+                li.innerText = `ลำดับ ${item.id}: [${item.type}] ${item.name} (หมวดหมู่: ${item.category}) - จำนวน ${item.amount} บาท`;
+                list.appendChild(li);
+            }
+
+            // วนลูปเพื่อคำนวณเงินรวมทั้งหมด (โจทย์ที่ 4)
+            for (let i = 0; i < transactions.length; i++) {
+                if (transactions[i].type === "รายรับ") {
+                    sumIncome += transactions[i].amount;
+                } else {
+                    sumExpense += transactions[i].amount;
+                }
+            }
+
+            // อัปเดตตัวเลขบนหน้าจอ
+            document.getElementById("total-income").innerText = sumIncome;
+            document.getElementById("total-expense").innerText = sumExpense;
+            document.getElementById("net-balance").innerText = sumIncome - sumExpense;
+        }
+
+        // โจทย์ที่ 2: ฟังก์ชันค้นหาข้อมูล (ทำงานตอนพิมพ์ทันที)
+        function filterData() {
+            let keyword = document.getElementById("search-box").value.toLowerCase();
+            let filteredArray = [];
+
+            // วนลูปหาชื่อรายการที่ตรงกับคำค้นหา
+            for (let i = 0; i < transactions.length; i++) {
+                if (transactions[i].name.toLowerCase().includes(keyword)) {
+                    filteredArray.push(transactions[i]);
+                }
+            }
+
+            // ส่งข้อมูลที่กรองแล้วไปแสดงผล
+            updateUI(filteredArray);
+        }
+
+        // โจทย์ที่ 5: ฟังก์ชันล้างข้อมูลทั้งหมด
+        function clearAll() {
+            let confirmDelete = confirm("ต้องการล้างข้อมูลทั้งหมดใช่หรือไม่คะ?");
+            if (confirmDelete === true) {
+                transactions = []; // ล้าง Array เป็นค่าว่าง
+                runningId = 1;     // เริ่มนับ ID ใหม่
+                updateUI();        // อัปเดตหน้าจอ (ยอดเงินจะกลายเป็น 0.0 ทันที)
+            }
+        }
+    </script>
+</body>
+</html>
