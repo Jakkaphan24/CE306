@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodging Car Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media', // รองรับ Dark mode อัตโนมัติตามระบบ
+        }
+    </script>
+    <style>
+        /* รองรับ Forced Colors สำหรับผู้ที่มีปัญหาทางสายตา */
+        @media (forced-colors: active) {
+            .car-player, .obstacle-box {
+                border: 2px solid CanvasText;
+            }
+            .lane-divider {
+                border-left: 2px dashed CanvasText;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col font-sans transition-colors duration-300">
+
+    <header class="text-center py-4 shadow-sm bg-white dark:bg-gray-800">
+        <h1 class="text-2xl font-bold text-blue-600 dark:text-blue-400">Street Dodger</h1>
+        <p class="text-sm mt-1">หลบสิ่งกีดขวางไปให้ไกลที่สุด! (เป้าหมายชนะ: 3,000 เมตร)</p>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center py-6 px-4">
+        
+        <!-- แผงควบคุมและสถานะ -->
+        <section class="w-full max-w-sm flex justify-between items-center mb-4">
+            <div class="flex flex-col">
+                <span class="text-sm font-semibold">ระยะทาง:</span>
+                <output id="scoreBoard" class="text-xl font-bold text-green-600 dark:text-green-400">0 m</output>
+            </div>
+            <div class="flex flex-col text-right">
+                <span class="text-sm font-semibold">ระดับ:</span>
+                <output id="levelBoard" class="text-xl font-bold text-orange-500">1</output>
+            </div>
+        </section>
+
+        <!-- ปุ่มควบคุมต่างๆ -->
+        <section class="w-full max-w-sm grid grid-cols-3 gap-2 mb-4">
+            <button onclick="showInstructions()" class="px-2 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded shadow text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400">
+                วิธีเล่น
+            </button>
+            <button onclick="startGame()" id="startBtn" class="px-2 py-2 bg-green-500 hover:bg-green-600 text-white rounded shadow text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-400">
+                เริ่มเกม
+            </button>
+            <button onclick="increaseLevel()" class="px-2 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded shadow text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-400">
+                เพิ่ม Level
+            </button>
+        </section>
+
+        <!-- ข้อความแจ้งเตือน (Notification) -->
+        <div id="notification" class="hidden w-full max-w-sm mb-2 p-2 bg-yellow-100 border border-yellow-400 text-yellow-700 dark:bg-yellow-900 dark:border-yellow-600 dark:text-yellow-200 rounded text-center text-sm font-bold transition-opacity duration-300">
+            แจ้งเตือนจะแสดงที่นี่
+        </div>
+
+        <!-- พื้นที่เกมเพลย์ (Game Board) -->
+        <section class="relative w-full max-w-sm h-[500px] bg-gray-600 dark:bg-gray-800 rounded-lg overflow-hidden border-4 border-gray-800 dark:border-gray-500 shadow-inner">
+            <!-- เส้นแบ่งเลน -->
+            <div class="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-1 border-l-4 border-dashed border-white opacity-50 lane-divider"></div>
+            
+            <!-- รถผู้เล่น -->
+            <!-- ใส่ motion-reduce:transition-none เพื่อรองรับผู้มีอาการแพ้การเคลื่อนไหว (Reduced Motion) -->
+            <div id="playerCar" class="car-player absolute bottom-4 w-12 h-20 bg-blue-400 dark:bg-blue-500 rounded-md shadow-lg transform -translate-x-1/2 transition-all duration-150 motion-reduce:transition-none" style="left: 25%;">
+                <div class="absolute top-2 w-full h-4 bg-gray-900 rounded-t-sm opacity-50"></div>
+                <div class="absolute bottom-2 w-full h-4 bg-red-600 rounded-b-sm opacity-80"></div>
+            </div>
+            
+            <!-- Container สำหรับใส่สิ่งกีดขวาง -->
+            <div id="obstaclesContainer"></div>
+        </section>
+
+    </main>
+
+    <!-- Dialog วิธีการเล่น -->
+    <dialog id="instructionModal" class="p-6 rounded-lg shadow-xl backdrop:bg-black backdrop:opacity-50 dark:bg-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 w-11/12 max-w-md">
+        <h2 class="text-xl font-bold mb-4">วิธีการเล่น (How to Play)</h2>
+        <ul class="list-disc pl-5 mb-6 space-y-2 text-sm">
+            <li>เกมมี 2 เลน ซ้ายและขวา</li>
+            <li>กดปุ่มลูกศร <strong>ซ้าย (Left Arrow)</strong> เพื่อเปลี่ยนเลนไปทางซ้าย</li>
+            <li>กดปุ่มลูกศร <strong>ขวา (Right Arrow)</strong> เพื่อเปลี่ยนเลนไปทางขวา</li>
+            <li>หลบสิ่งกีดขวางเพื่อเก็บระยะทาง (เมตร)</li>
+            <li>ทุกๆ 500 เมตร จะมีการแจ้งเตือนและความเร็วของเกมจะเพิ่มขึ้นอัตโนมัติ!</li>
+            <li>สามารถกดปุ่ม <strong>เพิ่ม Level</strong> เพื่อท้าทายตัวเองให้เกมเร็วขึ้นทันทีได้</li>
+            <li><strong>เป้าหมาย (ชนะ):</strong> ทำระยะทางให้ถึง 3,000 เมตร!</li>
+            <li><strong>เงื่อนไขแพ้:</strong> ชนสิ่งกีดขวาง</li>
+        </ul>
+        <div class="text-right">
+            <button onclick="closeInstructions()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm font-medium">ปิด</button>
+        </div>
+    </dialog>
+
+    <script>
+        // กำหนดตัวแปรสถานะของเกม
+        let isPlaying = false;
+        let gameLoopId;
+        let playerLane = 0; // 0 = ซ้าย, 1 = ขวา
+        let distance = 0;
+        let baseSpeed = 5; // ความเร็วเริ่มต้น
+        let currentSpeed = baseSpeed;
+        let level = 1;
+        let nextMilestone = 500;
+        let obstacles = [];
+        let frames = 0;
+        let spawnRate = 90; // จำนวนเฟรมต่อการปล่อยสิ่งกีดขวาง 1 ชิ้น
+
+        // อ้างอิง DOM Elements
+        const playerCar = document.getElementById('playerCar');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const levelBoard = document.getElementById('levelBoard');
+        const obstaclesContainer = document.getElementById('obstaclesContainer');
+        const startBtn = document.getElementById('startBtn');
+        const notification = document.getElementById('notification');
+        const instructionModal = document.getElementById('instructionModal');
+
+        // ฟังก์ชันควบคุมการเล่น (Keyboard)
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying) return;
+            
+            if (e.key === 'ArrowLeft') {
+                playerLane = 0;
+                updatePlayerPosition();
+                e.preventDefault(); // ป้องกันหน้าจอเลื่อน
+            } else if (e.key === 'ArrowRight') {
+                playerLane = 1;
+                updatePlayerPosition();
+                e.preventDefault(); // ป้องกันหน้าจอเลื่อน
+            }
+        });
+
+        // อัปเดตตำแหน่งรถ (25% คือกึ่งกลางเลนซ้าย, 75% คือกึ่งกลางเลนขวา)
+        function updatePlayerPosition() {
+            if (playerLane === 0) {
+                playerCar.style.left = '25%';
+            } else {
+                playerCar.style.left = '75%';
+            }
+        }
+
+        // เริ่มหรือเริ่มเกมใหม่
+        function startGame() {
+            isPlaying = true;
+            distance = 0;
+            level = 1;
+            currentSpeed = baseSpeed;
+            nextMilestone = 500;
+            playerLane = 0;
+            frames = 0;
+            obstacles = [];
+            obstaclesContainer.innerHTML = '';
+            
+            updatePlayerPosition();
+            updateScoreBoard();
+            startBtn.textContent = 'เริ่มใหม่ (Restart)';
+            hideNotification();
+            
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoop();
+        }
+
+        // จบเกม (แพ้)
+        function gameOver() {
+            isPlaying = false;
+            cancelAnimationFrame(gameLoopId);
+            showNotification(`💥 เกมโอเวอร์! ชนเข้าแล้ว ระยะทางของคุณคือ ${Math.floor(distance)} เมตร`, true);
+        }
+
+        // ชนะเกม
+        function gameWin() {
+            isPlaying = false;
+            cancelAnimationFrame(gameLoopId);
+            showNotification(`🎉 ยินดีด้วย! คุณชนะเกมแล้ว! ถึงเป้าหมาย 3,000 เมตร`, true);
+        }
+
+        // เพิ่มระดับความยาก (Manual)
+        function increaseLevel() {
+            if (!isPlaying) return;
+            levelUp();
+            showNotification(`เร่งความเร็ว! ตอนนี้อยู่ Level ${level}`);
+        }
+
+        // ฟังก์ชันเลื่อน Level ขึ้น
+        function levelUp() {
+            level++;
+            currentSpeed += 1.5;
+            spawnRate = Math.max(30, spawnRate - 10); // ลดเฟรมการเกิดสิ่งกีดขวาง (เกิดถี่ขึ้น)
+            levelBoard.textContent = level;
+        }
+
+        // ระบบแจ้งเตือน
+        let notifTimeout;
+        function showNotification(msg, persistent = false) {
+            notification.textContent = msg;
+            notification.classList.remove('hidden');
+            
+            if (notifTimeout) clearTimeout(notifTimeout);
+            
+            if (!persistent) {
+                notifTimeout = setTimeout(() => {
+                    hideNotification();
+                }, 3000);
+            }
+        }
+
+        function hideNotification() {
+            notification.classList.add('hidden');
+        }
+
+        // Modal วิธีเล่น
+        function showInstructions() {
+            instructionModal.showModal();
+        }
+        function closeInstructions() {
+            instructionModal.close();
+        }
+
+        // สร้างสิ่งกีดขวาง
+        function spawnObstacle() {
+            const obsLane = Math.floor(Math.random() * 2); // สุ่มเลน 0 หรือ 1
+            const obstacle = document.createElement('div');
+            // ห้ามใช้ String Concatenation ในชื่อคลาส Tailwind เช่น bg-${color}-500 ตามกฎข้อ 5
+            obstacle.className = 'obstacle-box absolute top-0 w-12 h-12 bg-red-500 rounded transform -translate-x-1/2 -translate-y-full shadow';
+            obstacle.style.left = obsLane === 0 ? '25%' : '75%';
+            obstacle.style.top = '0px';
+            
+            obstaclesContainer.appendChild(obstacle);
+            
+            obstacles.push({
+                element: obstacle,
+                y: -50,
+                lane: obsLane
+            });
+        }
+
+        // ตรวจสอบการชน (Collision Detection)
+        function checkCollision(obs) {
+            // รถผู้เล่นอยู่ที่ bottom: 16px (1rem), สูง 80px
+            // ขนาดเกมคือ h-[500px]
+            // ระยะ Y ของรถจะอยู่ที่ช่วงประมาณ 404px ถึง 484px
+            const carTop = 500 - 16 - 80;
+            const carBottom = 500 - 16;
+            
+            const obsTop = obs.y;
+            const obsBottom = obs.y + 48; // ความสูงสิ่งกีดขวางคือ h-12 = 48px
+            
+            // เช็คว่าอยู่ในเลนเดียวกันไหม
+            if (obs.lane === playerLane) {
+                // เช็คว่าแกน Y ทับซ้อนกันไหม
+                if (obsBottom > carTop && obsTop < carBottom) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // อัปเดตคะแนนบนหน้าจอ
+        function updateScoreBoard() {
+            scoreBoard.textContent = `${Math.floor(distance)} m`;
+        }
+
+        // วงลูปหลักของเกม
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            frames++;
+            
+            // เพิ่มระยะทาง
+            distance += (currentSpeed / 10);
+            updateScoreBoard();
+
+            // ตรวจสอบเงื่อนไขการแจ้งเตือนทุกๆ 500 เมตร และเพิ่มความเร็ว
+            if (distance >= nextMilestone) {
+                showNotification(`🌟 ถึงระยะ ${nextMilestone} เมตรแล้ว! ความเร็วเพิ่มขึ้น!`);
+                levelUp();
+                nextMilestone += 500;
+            }
+
+            // ตรวจสอบเงื่อนไขชนะ
+            if (distance >= 3000) {
+                gameWin();
+                return;
+            }
+
+            // สร้างสิ่งกีดขวาง
+            if (frames % spawnRate === 0) {
+                spawnObstacle();
+            }
+
+            // ขยับสิ่งกีดขวาง
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.y += currentSpeed;
+                obs.element.style.top = obs.y + 'px';
+
+                // เช็คชน
+                if (checkCollision(obs)) {
+                    gameOver();
+                    return;
+                }
+
+                // ลบสิ่งกีดขวางที่หลุดจอ
+                if (obs.y > 550) {
+                    obs.element.remove();
+                    obstacles.splice(i, 1);
+                    i--;
+                }
+            }
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
